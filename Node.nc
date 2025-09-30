@@ -22,6 +22,9 @@ module Node{
    uses interface SimpleSend as Sender;
 
    uses interface CommandHandler;
+
+   uses interface Flooding;
+   uses interface NeighborDiscover;
 }
 
 implementation{
@@ -33,12 +36,14 @@ implementation{
    event void Boot.booted(){
       call AMControl.start();
 
-      dbg(GENERAL_CHANNEL, "Booted\n");
+      dbg(GENERAL_CHANNEL, "Node booted and wiring check\n");
    }
 
    event void AMControl.startDone(error_t err){
       if(err == SUCCESS){
          dbg(GENERAL_CHANNEL, "Radio On\n");
+         call NeighborDiscover.findNeighbors();
+         call Flooding.printNeighbors();
       }else{
          //Retry until successful
          call AMControl.start();

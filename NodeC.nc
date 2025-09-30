@@ -18,16 +18,29 @@ implementation {
     components Node;
     components new AMReceiverC(AM_PACK) as GeneralReceive;
 
+    // Node receives the boot event from MainC
     Node -> MainC.Boot;
 
+    // Node gets incoming data from GeneralReceive for AM_PACK
     Node.Receive -> GeneralReceive;
 
+    // Node controls the radio through ActiveMessageC
     components ActiveMessageC;
     Node.AMControl -> ActiveMessageC;
 
+    // Node uses SimpleSendC on AM_PACK for sending packets
     components new SimpleSendC(AM_PACK);
     Node.Sender -> SimpleSendC;
 
     components CommandHandlerC;
     Node.CommandHandler -> CommandHandlerC;
+
+    // Expose NeighborDiscover interface
+    Node.NeighborDiscover -> NeighborDiscoverC;
+
+    Node.Flooding -> FloodingC;
+
+    // Declare NeighborDiscoverC component
+    components new NeighborDiscoverC(AM_PACK) as NeighborDiscoverC;
+    components new FloodingC(AM_FLOODING) as FloodingC;
 }

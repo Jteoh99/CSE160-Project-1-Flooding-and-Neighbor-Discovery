@@ -1,24 +1,16 @@
 /*
- * FloodingP.nc
- *
- * Full implementation of a basic flooding module for Project 1.
- * Features:
- *  - Passive neighbor discovery (updates neighbor table on every received packet)
- *  - Duplicate suppression (simple circular buffer cache of recent (src,seq) pairs)
- *  - TTL handling and forwarding to known neighbors via SimpleSend
- *  - Periodic maintenance to age neighbors and cache entries
- *
- * Notes:
- *  - This implementation prefers simplicity and clarity over efficiency.
- *  - For production use, replace static arrays with the provided Hashmap/List
- *    implementations in dataStructures/ for better scalability.
- */
+FloodingP.nc
+- Passive neighbor discovery (updates neighbor table on every received packet)
+- Duplicate suppression (simple circular buffer cache of recent (src,seq) pairs)
+- TTL handling and forwarding to known neighbors via SimpleSend
+- Periodic maintenance to age neighbors and cache entries
+*/
 
 #include <Timer.h>
 #include "../../includes/channels.h"
 #include "../../includes/packet.h"
 
-module FloodingP() {
+module FloodingP {
   provides interface Flooding;
 
   uses interface Receive;
@@ -32,7 +24,7 @@ implementation {
   enum { MAX_NEIGHBORS = 32 };
   typedef struct {
     uint16_t id;
-    uint32_t lastSeen; // simulation time in ms (we'll use a tick counter)
+    uint32_t lastSeen; // simulation time in ms (tick counter)
     bool valid;
   } neighbor_t;
 
@@ -54,6 +46,8 @@ implementation {
   // Helper functions
   void addOrUpdateNeighbor(uint16_t id) {
     int i;
+    uint32_t oldest = 0xFFFFFFFF;
+    int oldestIdx = 0;
     for (i = 0; i < MAX_NEIGHBORS; i++) {
       if (neighbors[i].valid && neighbors[i].id == id) {
         neighbors[i].lastSeen = ticks;
@@ -71,8 +65,6 @@ implementation {
       }
     }
     // no space: overwrite oldest
-    uint32_t oldest = 0xFFFFFFFF;
-    int oldestIdx = 0;
     for (i = 0; i < MAX_NEIGHBORS; i++) {
       if (neighbors[i].lastSeen < oldest) {
         oldest = neighbors[i].lastSeen;
@@ -114,6 +106,11 @@ implementation {
   }
 
   event message_t* Receive.receive(message_t* msg, void* payload, uint8_t len) {
+    pack* p;
+    int i;
+    pack sendPack;
+    error_t err;
+
     ticks += 1; // increment tick on each receive (approximate)
     dbg(FLOODING_CHANNEL, "Packet Received at node %hu (len=%hhu)\n", TOS_NODE_ID, len);
     if (len < sizeof(pack)) {
@@ -121,7 +118,7 @@ implementation {
       return msg;
     }
 
-    pack* p = (pack*)payload;
+    p = (pack*)payload;
 
     // Passive neighbor discovery
     if (p->src != TOS_NODE_ID) {
@@ -150,18 +147,16 @@ implementation {
     // Prepare forwarding: decrement TTL and forward to all neighbors
     p->TTL = p->TTL - 1;
 
-    int i;
     for (i = 0; i < MAX_NEIGHBORS; i++) {
       if (neighbors[i].valid) {
         uint16_t dest = neighbors[i].id;
         if (dest == p->src) continue; // don't send back to origin directly
         // send a copy: create a local pack copy to send
-        pack sendPack;
         memcpy(&sendPack, p, sizeof(pack));
         // set sendPack.src to this node
         sendPack.src = TOS_NODE_ID;
         // send via SimpleSend
-        error_t err = call SimpleSend.send(sendPack, dest);
+        err = call SimpleSend.send(sendPack, dest);
         if (err == SUCCESS) {
           dbg(FLOODING_CHANNEL, "Forwarded packet from %hu to %hu at node %hu\n", p->src, dest, TOS_NODE_ID);
         } else {
@@ -187,6 +182,7 @@ implementation {
 
   command void Flooding.printNeighbors() {
     int i;
+    dbg(GENERAL_CHANNEL, "printNeighbors called\n");
     for (i = 0; i < MAX_NEIGHBORS; i++) {
       if (neighbors[i].valid) {
         dbg(NEIGHBOR_CHANNEL, "Neighbor: %hu lastSeen: %lu at node %hu\n", neighbors[i].id, neighbors[i].lastSeen, TOS_NODE_ID);

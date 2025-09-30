@@ -5,16 +5,18 @@ configuration NodeAppC {
 implementation {
 	components MainC, NodeC, CommandHandlerC;
 
-	// NodeC already wires its own SimpleSend(AM_PACK) and Receive for AM_PACK
-	// We will attach Flooding on a separate AM type (AM_FLOODING)
 	components new AMReceiverC(AM_FLOODING) as FloodingReceive;
 
 	// Instantiate Flooding and NeighborDiscovery modules
 	components FloodingC(AM_FLOODING);
-	components NeighborDiscoveryC(AM_PACK);
+	components NeighborDiscoverC(AM_PACK);
 
 	// Wire Flooding receive to the AM receiver for the flooding AM type
 	FloodingC.Receive -> FloodingReceive;
+
+	// Wire NodeC's Flooding and NeighborDiscovery uses to the components
+	NodeC.Flooding -> FloodingC;
+	NodeC.NeighborDiscover -> NeighborDiscoverC;
 
 	// Boot comes from NodeC
 	Boot = NodeC;
