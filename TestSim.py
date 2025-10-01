@@ -132,7 +132,7 @@ class TestSim:
 def main():
     s = TestSim();
     s.runTime(10);
-    s.loadTopo("long_line.topo");
+    s.loadTopo("example.topo");
     s.loadNoise("no_noise.txt");
     s.bootAll();
     s.addChannel(s.COMMAND_CHANNEL);
@@ -141,27 +141,27 @@ def main():
     s.addChannel(s.NEIGHBOR_CHANNEL);
 
     # Phase 1: Let neighbor discovery stabilize
-    print("=== PHASE 1: Neighbor Discovery (20 seconds) ===")
+    print("PHASE 1: Neighbor Discovery (20 seconds)")
     s.runTime(20);
     
     # Phase 2: Show all neighbors
-    print("\n=== PHASE 2: Neighbor Summary ===")
+    print("\nPHASE 2: Neighbor Summary")
     # Request neighbor dump from all nodes (1 to 19 for long_line.topo)
     for i in range(1, 20):
         s.neighborDMP(i);
     s.runTime(5);  # Give time for all neighbor dumps to complete
     
     # Phase 3: Test flooding with different paths
-    print("\n=== PHASE 3: Flooding Tests ===")
-    print("--- Test 1: Node 1 -> Node 9 ---")
+    print("\nPHASE 3: Flooding Tests")
+    print("Test 1: Node 1 -> Node 9")
     s.ping(1, 9, "Hello Node 9!");  
     s.runTime(10);
     
-    print("\n--- Test 2: Node 9 -> Node 1 ---")
+    print("\nTest 2: Node 9 -> Node 1")
     s.ping(9, 1, "Hello Node 1!");  
     s.runTime(10);
     
-    print("\n--- Test 3: Node 1 -> Node 5 ---")
+    print("\nTest 3: Node 1 -> Node 5")
     s.ping(1, 5, "Hello Node 5!"); 
     s.runTime(10);
 

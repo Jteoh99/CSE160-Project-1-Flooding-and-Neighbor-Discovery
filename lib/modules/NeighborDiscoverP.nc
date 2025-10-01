@@ -74,7 +74,7 @@ implementation {
 
     // Age out old neighbors
     void ageNeighbors() {
-        uint32_t ageLimit = 30000;
+        uint32_t ageLimit = 10000; // 10 seconds - longer than beacon interval (2-3s)
         int i;
         bool changed = FALSE;
         for (i = 0; i < MAX_NEIGHBORS; i++) {
@@ -90,6 +90,14 @@ implementation {
 
     command void NeighborDiscover.findNeighbors() {
         uint16_t delay = (call Random.rand16() % 300) + 100;
+        int i;
+        
+        // Clear all existing neighbors on startup
+        for (i = 0; i < MAX_NEIGHBORS; i++) {
+            neighbors[i].valid = FALSE;
+        }
+        updateNeighborCache();
+        
         call neighborTimer.startOneShot(delay);
         // Start periodic neighbor printing after 10 seconds to allow discovery
         call printTimer.startOneShot(10000);
@@ -106,18 +114,28 @@ implementation {
         beacon.protocol = 0; // protocol for neighbor discovery
         memcpy(beacon.payload, "ND", 3);
         result = call SimpleSend.send(beacon, beacon.dest);
-        call neighborTimer.startPeriodic((call Random.rand16() % 1000) + 2000); // Less frequent: 2-3 seconds
+        call neighborTimer.startPeriodic((call Random.rand16() % 500) + 1000); // More frequent: 1-1.5 seconds
     }
 
     event void neighborTimer.fired() {
-        ticks += 2000; // Update tick increment to match new timer
+        ticks += 1250; // Update tick increment to match new timer (average of 1-1.5s)
         ageNeighbors();
         post search();
     }
 
+    // Check if two nodes should be neighbors - accept all reachable nodes
+    bool isValidNeighbor(uint16_t myNode, uint16_t neighborNode) {
+        // Accept any neighbor that can send beacons to us
+        // The simulation topology file handles radio connectivity constraints
+        return TRUE;
+    }
+
     // Call this from Receive.receive when a beacon is received
     void receiveBeacon(uint16_t src) {
-        addOrUpdateNeighbor(src);
+        // Accept any valid beacon (topology handled by simulation)
+        if (isValidNeighbor(TOS_NODE_ID, src)) {
+            addOrUpdateNeighbor(src);
+        }
     }
 
     command void NeighborDiscover.receive(pack* msg) {
@@ -126,10 +144,8 @@ implementation {
             // This is a neighbor discovery beacon
             receiveBeacon(msg->src);
         }
-        // Also do passive neighbor discovery for any packet
-        if (msg->src != TOS_NODE_ID) {
-            addOrUpdateNeighbor(msg->src);
-        }
+        // Note: Removed passive neighbor discovery for flooding packets
+        // to prevent adding distant nodes as neighbors through multi-hop paths
     }
 
     command void NeighborDiscover.printNeighbors() {

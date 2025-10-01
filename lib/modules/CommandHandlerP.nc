@@ -41,6 +41,9 @@ implementation{
             msg = (CommandMsg*) payload;
 
             dbg(COMMAND_CHANNEL, "A Command has been Issued.\n");
+            // NEIGHBOR_CHANNEL requirement: notify when command packet is issued
+            dbg(NEIGHBOR_CHANNEL, "COMMAND_ISSUED: Node %hu received command packet (id=%hu)\n", 
+                TOS_NODE_ID, msg->id);
             buff = (uint8_t*) msg->payload;
             commandID = msg->id;
 
@@ -50,11 +53,15 @@ implementation{
             // value and the string in the remainder of the payload
             case CMD_PING:
                 dbg(COMMAND_CHANNEL, "Command Type: Ping\n");
+                dbg(NEIGHBOR_CHANNEL, "PING_COMMAND: Node %hu executing ping to destination %hu\n", 
+                    TOS_NODE_ID, buff[0]);
                 signal CommandHandler.ping(buff[0], &buff[1]);
                 break;
 
             case CMD_NEIGHBOR_DUMP:
                 dbg(COMMAND_CHANNEL, "Command Type: Neighbor Dump\n");
+                dbg(NEIGHBOR_CHANNEL, "NEIGHBOR_DUMP_COMMAND: Node %hu executing neighbor dump\n", 
+                    TOS_NODE_ID);
                 signal CommandHandler.printNeighbors();
                 break;
 

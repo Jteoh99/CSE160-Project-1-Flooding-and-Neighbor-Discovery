@@ -18,7 +18,7 @@ module Node{
    uses interface Boot;
 
    uses interface SplitControl as AMControl;
-   uses interface Receive;
+   // Remove Receive interface - FloodingC handles all packet reception
 
    uses interface SimpleSend as Sender;
 
@@ -43,7 +43,6 @@ implementation{
 
    event void AMControl.startDone(error_t err){
       if(err == SUCCESS){
-         //dbg(GENERAL_CHANNEL, "Radio On\n");
          call NeighborDiscover.findNeighbors();
          call NeighborDiscover.printNeighbors();
          call Flooding.start(); // Start the flooding module
@@ -55,21 +54,33 @@ implementation{
 
    event void AMControl.stopDone(error_t err){}
 
-   event message_t* Receive.receive(message_t* msg, void* payload, uint8_t len){
-      // Node.nc receives packets but flooding module handles them
-      // No debug output needed here to reduce noise
-      return msg;
-   }
-
+   // Remove Receive.receive event - FloodingC handles all packet reception now
 
    event void CommandHandler.ping(uint16_t destination, uint8_t *payload){
+      uint16_t* neighbors;
+      uint8_t numNeighbors;
+      
       dbg(FLOODING_CHANNEL, "PING_START: Node %hu pinging Node %hu (seq=%hu, payload='%s')\n", 
           TOS_NODE_ID, destination, sequenceNum, payload);
-      makePack(&sendPackage, TOS_NODE_ID, destination, 3, PROTOCOL_PING, sequenceNum++, payload, PACKET_MAX_PAYLOAD_SIZE);
-      call Sender.send(sendPackage, destination);
+      makePack(&sendPackage, TOS_NODE_ID, destination, 30, PROTOCOL_PING, sequenceNum++, payload, PACKET_MAX_PAYLOAD_SIZE);
+      
+      // Get neighbors and send through flooding module
+      neighbors = call NeighborDiscover.getNeighbors();
+      numNeighbors = call NeighborDiscover.getNumNeighbors();
+      
+      if (numNeighbors > 0) {
+         dbg(FLOODING_CHANNEL, "PING_SEND: Node %hu sending via flooding to all neighbors (dest=%hu)\n", 
+             TOS_NODE_ID, destination);
+         call Flooding.send(&sendPackage, 0); // dest parameter ignored, floods to all neighbors
+      } else {
+         dbg(FLOODING_CHANNEL, "PING_FAIL: Node %hu has no neighbors to send to\n", TOS_NODE_ID);
+      }
    }
 
-   event void CommandHandler.printNeighbors(){}
+   event void CommandHandler.printNeighbors(){
+      // Call the NeighborDiscover interface to print neighbors
+      call NeighborDiscover.printNeighbors();
+   }
 
    event void CommandHandler.printRouteTable(){}
 

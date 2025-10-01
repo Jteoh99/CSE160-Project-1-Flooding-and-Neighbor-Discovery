@@ -16,13 +16,10 @@ configuration NodeC{
 implementation {
     components MainC;
     components Node;
-    components new AMReceiverC(AM_PACK) as GeneralReceive;
+    // Remove Node's own receiver - let FloodingC handle all packet reception
 
     // Node receives the boot event from MainC
     Node -> MainC.Boot;
-
-    // Node gets incoming data from GeneralReceive for AM_PACK
-    Node.Receive -> GeneralReceive;
 
     // Node controls the radio through ActiveMessageC
     components ActiveMessageC;
@@ -40,6 +37,6 @@ implementation {
 
     Node.Flooding -> FloodingC;
 
-    // Use same channel for both Flooding and NeighborDiscover
-    components new FloodingC(AM_PACK) as FloodingC;
+    // Use AM_FLOODING channel for Flooding module
+    components new FloodingC(AM_FLOODING) as FloodingC;
 }

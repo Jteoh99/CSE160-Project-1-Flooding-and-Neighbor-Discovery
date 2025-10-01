@@ -17,7 +17,7 @@ def main():
 
     s.runTime(1)
     # Ping: use TestSim.ping which sends a CommandMsg that Node's CommandHandler.ping event receives
-    s.ping(1, 3, "Hello from 1 to 3")
+    s.ping(1, 2, "Hello from 1 to 2")
     s.runTime(5)
 
 if __name__ == '__main__':

@@ -47,6 +47,12 @@ implementation{
    // This is a wrapper around the am sender, that adds queuing and delayed
    // sending
    command error_t SimpleSend.send(pack msg, uint16_t dest) {
+       // Only log non-beacon packets to reduce noise
+       if (!(msg.protocol == 0 && msg.dest == 65535)) {
+            //dbg(FLOODING_CHANNEL, "SIMPLESEND: Node %hu queuing packet %hu->%hu (protocol=%hu) for dest %hu\n", 
+               //TOS_NODE_ID, msg.src, msg.dest, msg.protocol, dest);
+       }
+       
        // First we check to see if we have room in our queue. Since TinyOS is
        // designed for embedded systems, there is no dynamic memory. This forces
        // us to allocate space in a pool where pointers can be retrieved. See
@@ -84,9 +90,16 @@ implementation{
 
          // Attempt to send it.
          if(SUCCESS == send(info->src,info->dest, &(info->packet))){
+            // Silent success - reducing debug noise
             //Release resources used if the attempt was successful
             call Queue.dequeue();
             call Pool.put(info);
+         } else {
+            // Only log failures for non-beacon packets (errors are important)
+            if (!(info->packet.protocol == 0 && info->packet.dest == 65535)) {
+                dbg(FLOODING_CHANNEL, "SIMPLESEND: Node %hu failed to transmit packet to %hu\n", 
+                    TOS_NODE_ID, info->dest);
+            }
          }
 
 
