@@ -12,6 +12,7 @@
 #include "includes/CommandMsg.h"
 #include "includes/sendInfo.h"
 #include "includes/channels.h"
+#include "includes/protocol.h"
 
 module Node{
    uses interface Boot;
@@ -29,6 +30,7 @@ module Node{
 
 implementation{
    pack sendPackage;
+   uint16_t sequenceNum = 0;
 
    // Prototypes
    void makePack(pack *Package, uint16_t src, uint16_t dest, uint16_t TTL, uint16_t Protocol, uint16_t seq, uint8_t *payload, uint8_t length);
@@ -36,14 +38,15 @@ implementation{
    event void Boot.booted(){
       call AMControl.start();
 
-      dbg(GENERAL_CHANNEL, "Node booted and wiring check\n");
+      //dbg(GENERAL_CHANNEL, "Node booted and wiring check\n");
    }
 
    event void AMControl.startDone(error_t err){
       if(err == SUCCESS){
-         dbg(GENERAL_CHANNEL, "Radio On\n");
+         //dbg(GENERAL_CHANNEL, "Radio On\n");
          call NeighborDiscover.findNeighbors();
-         call Flooding.printNeighbors();
+         call NeighborDiscover.printNeighbors();
+         call Flooding.start(); // Start the flooding module
       }else{
          //Retry until successful
          call AMControl.start();
@@ -53,20 +56,16 @@ implementation{
    event void AMControl.stopDone(error_t err){}
 
    event message_t* Receive.receive(message_t* msg, void* payload, uint8_t len){
-      dbg(GENERAL_CHANNEL, "Packet Received\n");
-      if(len==sizeof(pack)){
-         pack* myMsg=(pack*) payload;
-         dbg(GENERAL_CHANNEL, "Package Payload: %s\n", myMsg->payload);
-         return msg;
-      }
-      dbg(GENERAL_CHANNEL, "Unknown Packet Type %d\n", len);
+      // Node.nc receives packets but flooding module handles them
+      // No debug output needed here to reduce noise
       return msg;
    }
 
 
    event void CommandHandler.ping(uint16_t destination, uint8_t *payload){
-      dbg(GENERAL_CHANNEL, "PING EVENT \n");
-      makePack(&sendPackage, TOS_NODE_ID, destination, 0, 0, 0, payload, PACKET_MAX_PAYLOAD_SIZE);
+      dbg(FLOODING_CHANNEL, "PING_START: Node %hu pinging Node %hu (seq=%hu, payload='%s')\n", 
+          TOS_NODE_ID, destination, sequenceNum, payload);
+      makePack(&sendPackage, TOS_NODE_ID, destination, 3, PROTOCOL_PING, sequenceNum++, payload, PACKET_MAX_PAYLOAD_SIZE);
       call Sender.send(sendPackage, destination);
    }
 

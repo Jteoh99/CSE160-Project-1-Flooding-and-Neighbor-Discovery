@@ -35,12 +35,11 @@ implementation {
     components CommandHandlerC;
     Node.CommandHandler -> CommandHandlerC;
 
-    // Expose NeighborDiscover interface
-    Node.NeighborDiscover -> NeighborDiscoverC;
+    // Expose NeighborDiscover interface through FloodingC
+    Node.NeighborDiscover -> FloodingC.NeighborDiscover;
 
     Node.Flooding -> FloodingC;
 
-    // Declare NeighborDiscoverC component
-    components new NeighborDiscoverC(AM_PACK) as NeighborDiscoverC;
-    components new FloodingC(AM_FLOODING) as FloodingC;
+    // Use same channel for both Flooding and NeighborDiscover
+    components new FloodingC(AM_PACK) as FloodingC;
 }

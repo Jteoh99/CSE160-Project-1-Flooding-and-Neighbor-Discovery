@@ -11,8 +11,11 @@ implementation{
     components new TimerMilliC() as neighborTimer;  
     NeighborDiscoverP.neighborTimer -> neighborTimer;
 
+    components new TimerMilliC() as printTimer;
+    NeighborDiscoverP.printTimer -> printTimer;
+
     components RandomC as Random;
-    NeighborDiscoverP.Random -> Random;
+    NeighborDiscoverP.Random -> Random.Random;
 
     components new SimpleSendC(channel) as NDSSend;
     NeighborDiscoverP.SimpleSend -> NDSSend;
