@@ -183,9 +183,9 @@ implementation {
     }
 
     event void printTimer.fired() {
-        // Print neighbors with clear separation - only once after discovery period
+        // Print neighbors with clear separation only once after discovery period
         call NeighborDiscover.printNeighbors();
-        // Don't restart the timer - print only once
+        // Don't restart the timer print only once
     }
 
     command uint16_t* NeighborDiscover.getNeighbors() {

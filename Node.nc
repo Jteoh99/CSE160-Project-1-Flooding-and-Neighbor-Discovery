@@ -5,6 +5,8 @@
  * @author UCM ANDES Lab
  * @date   2013/09/03
  *
+ * docker run --rm -it --mount type=bind,source="C:\Users\jteoh\Dropbox\PC\Documents\GitHub\CSE160\CSE160 Project 1 Flooding and Neighbor Discovery",target=/workspace -w /workspace ucmercedandeslab/tinyos_debian:latest /bin/bash
+ * make micaz sim
  */
 #include <Timer.h>
 #include "includes/command.h"
@@ -18,7 +20,8 @@ module Node{
    uses interface Boot;
 
    uses interface SplitControl as AMControl;
-   // Remove Receive interface - FloodingC handles all packet reception
+   // Remove Receive interface
+   // FloodingC handles all packet reception
 
    uses interface SimpleSend as Sender;
 

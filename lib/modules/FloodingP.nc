@@ -1,7 +1,7 @@
 /*
 FloodingP.nc
 - Passive neighbor discovery (updates neighbor table on every received packet)
-- Duplicate suppression (simple circular buffer cache of recent (src,seq) pairs)
+- Duplicate suppression
 - TTL handling and forwarding to known neighbors via SimpleSend
 - Periodic maintenance to age neighbors and cache entries
 */
@@ -169,7 +169,7 @@ implementation {
         // Forward the packet
         err = call SimpleSend.send(sendPack, neighbor);
         if (err == SUCCESS) {
-          // FLOODING_CHANNEL requirement: show packet sent with source location
+          // show packet sent with source location
           dbg(FLOODING_CHANNEL, "SENT: [%hu->%hu] from Node %hu to Node %hu (TTL %hu->%hu)\n", 
               p->src, p->dest, TOS_NODE_ID, neighbor, p->TTL, sendPack.TTL);
           forwardCount++;

@@ -132,7 +132,7 @@ class TestSim:
 def main():
     s = TestSim();
     s.runTime(10);
-    s.loadTopo("example.topo");
+    s.loadTopo("long_line.topo");
     s.loadNoise("no_noise.txt");
     s.bootAll();
     s.addChannel(s.COMMAND_CHANNEL);
@@ -153,17 +153,24 @@ def main():
     
     # Phase 3: Test flooding with different paths
     print("\nPHASE 3: Flooding Tests")
-    print("Test 1: Node 1 -> Node 9")
-    s.ping(1, 9, "Hello Node 9!");  
+    print("Test 1: Node 1 -> Node 18")
+    s.ping(1, 18, "Hello Node 19!"); 
     s.runTime(10);
     
     print("\nTest 2: Node 9 -> Node 1")
     s.ping(9, 1, "Hello Node 1!");  
     s.runTime(10);
+    s.moteOff(5);
+    s.runTime(30);
     
     print("\nTest 3: Node 1 -> Node 5")
-    s.ping(1, 5, "Hello Node 5!"); 
+    s.ping(3, 10, "Hello Node 10!"); 
     s.runTime(10);
+
+    print("\nTest 4")
+    s.neighborDMP(6);
+    s.runTime(10);
+
 
 if __name__ == '__main__':
     main()
