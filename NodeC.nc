@@ -37,6 +37,11 @@ implementation {
 
     Node.Flooding -> FloodingC;
 
+    // Link-State routing component
+    components LinkStateC;
+    Node.LinkState -> LinkStateC;
+    LinkStateC.NeighborDiscover -> FloodingC.NeighborDiscover;
+
     // Use AM_FLOODING channel for Flooding module
     components new FloodingC(AM_FLOODING) as FloodingC;
 }

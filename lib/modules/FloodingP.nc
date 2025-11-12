@@ -90,14 +90,26 @@ implementation {
     sender = call AMPacket.source(msg);
 
     // Only process beacon packets for neighbor discovery (not flooding packets)
-    if (p->protocol == 0 && p->dest == 65535) {
+    if (p->protocol == PROTOCOL_NEIGHBOR_DISCOVERY && p->dest == 65535) {
       call NeighborDiscover.receive(p);
       return msg; // Skip flooding processing for beacons
     }
 
+    // Handle link-state broadcasts - both deliver locally AND continue flooding
+    if (p->protocol == PROTOCOL_LINKSTATE && p->dest == 65535) {
+      // Deliver LSA to local node for processing
+      signal Flooding.linkStateReceived(p);
+      
+      // Continue with flooding logic below to forward to other nodes
+    }
+
     // FLOODING_CHANNEL requirement: show packet received with source location
-    dbg(FLOODING_CHANNEL, "RECEIVED: [%hu->%hu] at Node %hu from Node %hu (TTL=%hu, seq=%hu)\n", 
-        p->src, p->dest, TOS_NODE_ID, sender, p->TTL, p->seq);
+    // Skip logging beacon packets and routine LSA floods to reduce noise
+    if (!(p->protocol == PROTOCOL_NEIGHBOR_DISCOVERY && p->dest == 65535) && 
+        !(p->protocol == PROTOCOL_LINKSTATE && p->dest == 65535)) {
+        dbg(FLOODING_CHANNEL, "RECEIVED: [%hu->%hu] at Node %hu from Node %hu (TTL=%hu, seq=%hu)\n", 
+            p->src, p->dest, TOS_NODE_ID, sender, p->TTL, p->seq);
+    }
 
     // Duplicate suppression - check BEFORE any processing
     if (isDuplicate(p->src, p->seq, p->protocol)) {
@@ -110,8 +122,8 @@ implementation {
 
     // If this packet is for me, deliver (don't forward)
     if (p->dest == TOS_NODE_ID) {
-      dbg(FLOODING_CHANNEL, "DELIVERY: [%hu->%hu] REACHED DESTINATION at Node %hu!\n", 
-          p->src, p->dest, TOS_NODE_ID);
+      dbg(GENERAL_CHANNEL, ">>> PING ARRIVAL: Node %hu received packet from Node %hu - DESTINATION REACHED!\n", 
+          TOS_NODE_ID, p->src);
       
       if (p->protocol == PROTOCOL_PING) {
         dbg(FLOODING_CHANNEL, "PING: Node %hu received ping from %hu, sending reply\n", 
@@ -122,6 +134,8 @@ implementation {
         numNeighbors = call NeighborDiscover.getNumNeighbors();
         
         if (numNeighbors > 0) {
+          uint16_t nextHop;
+          
           memcpy(&sendPack, p, sizeof(pack));
           sendPack.dest = p->src;
           sendPack.src = TOS_NODE_ID;
@@ -129,24 +143,68 @@ implementation {
           sendPack.TTL = 30; // Higher TTL for reply to reach source
           sendPack.seq = localSeqNum++; // New sequence number for reply
           
-          // Use flooding for reply to find correct path back
-          err = call Flooding.send(&sendPack, 0);
-          if (err == SUCCESS) {
-            dbg(FLOODING_CHANNEL, "REPLY: Node %hu sent ping reply to %hu via flooding\n", 
-                TOS_NODE_ID, p->src);
+          // Try to route the reply using routing table
+          nextHop = signal Flooding.routePacket(&sendPack);
+          
+          if (nextHop != 0xFFFF && nextHop != 0) {
+            // Route the reply to specific next hop
+            err = call SimpleSend.send(sendPack, nextHop);
+            if (err == SUCCESS) {
+              dbg(FLOODING_CHANNEL, "REPLY: Node %hu sent ping reply to %hu via route (next-hop %hu)\n", 
+                  TOS_NODE_ID, p->src, nextHop);
+            }
+          } else {
+            // Fall back to flooding for reply
+            err = call Flooding.send(&sendPack, 0);
+            if (err == SUCCESS) {
+              dbg(FLOODING_CHANNEL, "REPLY: Node %hu sent ping reply to %hu via flooding\n", 
+                  TOS_NODE_ID, p->src);
+            }
           }
         }
       } else if (p->protocol == PROTOCOL_PINGREPLY) {
         dbg(FLOODING_CHANNEL, "REPLY: Node %hu received ping reply from %hu\n", 
             TOS_NODE_ID, p->src);
+      } else if (p->protocol == PROTOCOL_LINKSTATE) {
+        dbg(FLOODING_CHANNEL, "LINKSTATE: Node %hu received LSA from %hu\n", 
+            TOS_NODE_ID, p->src);
+        // Signal LinkState packet to upper layer
+        signal Flooding.linkStateReceived(p);
       }
       return msg;
     }
 
+    // For packets NOT destined for us, check if we should route or flood
+    // Route unicast packets if we have a route, flood only broadcast packets or when no route
+    if (p->dest != 0xFFFF && p->dest != 65535) {
+      uint16_t nextHop;
+      
+      // Unicast packet - try to route it
+      nextHop = signal Flooding.routePacket(p);
+      
+      if (nextHop != 0xFFFF && nextHop != 0) {
+        // We have a route - send to specific next hop
+        memcpy(&sendPack, p, sizeof(pack));
+        sendPack.TTL = p->TTL - 1;
+        
+        err = call SimpleSend.send(sendPack, nextHop);
+        if (err == SUCCESS) {
+          dbg(GENERAL_CHANNEL, ">>> ROUTED: [%hu->%hu] forwarded to next-hop %hu\n", 
+              p->src, p->dest, nextHop);
+        }
+        return msg;
+      }
+      // If no route available, fall through to flooding
+    }
+
     // TTL handling
     if (p->TTL <= 1) {
-      dbg(FLOODING_CHANNEL, "TTL_EXPIRED: [%hu->%hu] died at Node %hu (TTL=%hu)\n", 
-          p->src, p->dest, TOS_NODE_ID, p->TTL);
+      // Only log TTL expiration for non-beacon and non-routine LSA packets
+      if (!(p->protocol == PROTOCOL_NEIGHBOR_DISCOVERY && p->dest == 65535) && 
+          !(p->protocol == PROTOCOL_LINKSTATE && p->dest == 65535)) {
+          dbg(FLOODING_CHANNEL, "TTL_EXPIRED: [%hu->%hu] died at Node %hu (TTL=%hu)\n", 
+              p->src, p->dest, TOS_NODE_ID, p->TTL);
+      }
       return msg;
     }
 
@@ -169,16 +227,20 @@ implementation {
         // Forward the packet
         err = call SimpleSend.send(sendPack, neighbor);
         if (err == SUCCESS) {
-          // show packet sent with source location
-          dbg(FLOODING_CHANNEL, "SENT: [%hu->%hu] from Node %hu to Node %hu (TTL %hu->%hu)\n", 
-              p->src, p->dest, TOS_NODE_ID, neighbor, p->TTL, sendPack.TTL);
+          // show packet sent with source location (skip beacon packets and routine LSA floods for cleaner output)
+          if (!(p->protocol == PROTOCOL_NEIGHBOR_DISCOVERY && p->dest == 65535) && 
+              !(p->protocol == PROTOCOL_LINKSTATE && p->dest == 65535)) {
+              dbg(FLOODING_CHANNEL, "   Flooded: [%hu->%hu] from Node %hu to Node %hu (TTL %hu->%hu)\n", 
+                  p->src, p->dest, TOS_NODE_ID, neighbor, p->TTL, sendPack.TTL);
+          }
           forwardCount++;
         }
       }
     }
     
-    // Show when no forwarding is possible
-    if (forwardCount == 0) {
+    // Show when no forwarding is possible (skip beacon packets and routine LSA floods)
+    if (forwardCount == 0 && !(p->protocol == PROTOCOL_NEIGHBOR_DISCOVERY && p->dest == 65535) && 
+        !(p->protocol == PROTOCOL_LINKSTATE && p->dest == 65535)) {
       dbg(FLOODING_CHANNEL, "NO_FORWARD: [%hu->%hu] Node %hu could not forward (no valid neighbors)\n", 
           p->src, p->dest, TOS_NODE_ID);
     }
@@ -203,8 +265,12 @@ implementation {
     error_t err = FAIL;
     int sentCount = 0;
     
-    dbg(FLOODING_CHANNEL, "FLOOD_SEND: Node %hu initiating flood for packet %hu->%hu (protocol=%hu)\n", 
-        TOS_NODE_ID, packet->src, packet->dest, packet->protocol);
+    // Only log non-beacon and non-routine LSA packets to reduce noise
+    if (!(packet->protocol == PROTOCOL_NEIGHBOR_DISCOVERY && packet->dest == 65535) && 
+        !(packet->protocol == PROTOCOL_LINKSTATE && packet->dest == 65535)) {
+        dbg(FLOODING_CHANNEL, "FLOOD_SEND: Node %hu initiating flood for packet %hu->%hu (protocol=%hu)\n", 
+            TOS_NODE_ID, packet->src, packet->dest, packet->protocol);
+    }
     
     // Add to duplicate cache to prevent looping back to source
     addDup(packet->src, packet->seq, packet->protocol);
@@ -221,7 +287,8 @@ implementation {
       }
     }
     
-    if (sentCount == 0) {
+    if (sentCount == 0 && !(packet->protocol == PROTOCOL_NEIGHBOR_DISCOVERY && packet->dest == 65535) && 
+        !(packet->protocol == PROTOCOL_LINKSTATE && packet->dest == 65535)) {
       dbg(FLOODING_CHANNEL, "FLOOD_FAIL: Node %hu could not send to any neighbors\n", TOS_NODE_ID);
     }
     
@@ -243,12 +310,17 @@ implementation {
 
     p = (pack*)payload;
     
-    // Only process beacon packets (protocol 0, broadcast dest)
-    if (p->protocol == 0 && p->dest == 65535) {
+    // Only process beacon packets (neighbor discovery protocol, broadcast dest)
+    if (p->protocol == PROTOCOL_NEIGHBOR_DISCOVERY && p->dest == 65535) {
       call NeighborDiscover.receive(p);
     }
     
     return msg;
+  }
+
+  // Handle neighbor changes - empty implementation since flooding doesn't need to act on this
+  event void NeighborDiscover.neighborsChanged() {
+    // Flooding module doesn't need to respond to neighbor changes
   }
 
 }

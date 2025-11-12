@@ -48,7 +48,7 @@ implementation{
    // sending
    command error_t SimpleSend.send(pack msg, uint16_t dest) {
        // Only log non-beacon packets to reduce noise
-       if (!(msg.protocol == 0 && msg.dest == 65535)) {
+       if (!(msg.protocol == PROTOCOL_NEIGHBOR_DISCOVERY && msg.dest == 65535)) {
             //dbg(FLOODING_CHANNEL, "SIMPLESEND: Node %hu queuing packet %hu->%hu (protocol=%hu) for dest %hu\n", 
                //TOS_NODE_ID, msg.src, msg.dest, msg.protocol, dest);
        }
@@ -96,7 +96,7 @@ implementation{
             call Pool.put(info);
          } else {
             // Only log failures for non-beacon packets (errors are important)
-            if (!(info->packet.protocol == 0 && info->packet.dest == 65535)) {
+            if (!(info->packet.protocol == PROTOCOL_NEIGHBOR_DISCOVERY && info->packet.dest == 65535)) {
                 dbg(FLOODING_CHANNEL, "SIMPLESEND: Node %hu failed to transmit packet to %hu\n", 
                     TOS_NODE_ID, info->dest);
             }

@@ -30,12 +30,18 @@ implementation {
     // Update cached neighbor list for fast access
     void updateNeighborCache() {
         int i;
+        uint8_t prevNumNeighbors = numCachedNeighbors;
         numCachedNeighbors = 0;
         for (i = 0; i < MAX_NEIGHBORS; i++) {
             if (neighbors[i].valid) {
                 cachedNeighbors[numCachedNeighbors] = neighbors[i].id;
                 numCachedNeighbors++;
             }
+        }
+        
+        // Signal if the number of neighbors changed
+        if (numCachedNeighbors != prevNumNeighbors) {
+            signal NeighborDiscover.neighborsChanged();
         }
     }
 
@@ -111,7 +117,7 @@ implementation {
         beacon.dest = 0xFFFF; // broadcast
         beacon.seq = ticks;
         beacon.TTL = 1;
-        beacon.protocol = 0; // protocol for neighbor discovery
+        beacon.protocol = PROTOCOL_NEIGHBOR_DISCOVERY; // protocol for neighbor discovery
         memcpy(beacon.payload, "ND", 3);
         result = call SimpleSend.send(beacon, beacon.dest);
         call neighborTimer.startPeriodic((call Random.rand16() % 500) + 1000); // More frequent: 1-1.5 seconds
@@ -140,7 +146,7 @@ implementation {
 
     command void NeighborDiscover.receive(pack* msg) {
         // Handle neighbor discovery packets
-        if (msg->protocol == 0 && msg->src != TOS_NODE_ID) {
+        if (msg->protocol == PROTOCOL_NEIGHBOR_DISCOVERY && msg->src != TOS_NODE_ID) {
             // This is a neighbor discovery beacon
             receiveBeacon(msg->src);
         }
@@ -178,8 +184,8 @@ implementation {
             sprintf(outputStr, "NEIGHBORS: Node %hu has 0 neighbors: []", TOS_NODE_ID);
         }
         
-        // Output the complete string in a single dbg() call
-        dbg(NEIGHBOR_CHANNEL, "%s\n", outputStr);
+        // Output the complete string in a single dbg() call - SILENCED for clean routing output
+        // dbg(NEIGHBOR_CHANNEL, "%s\n", outputStr);
     }
 
     event void printTimer.fired() {

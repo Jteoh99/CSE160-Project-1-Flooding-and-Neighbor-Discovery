@@ -9,4 +9,10 @@ interface Flooding{
   command void stop();
   //Send a packet through the flooding protocol
   command error_t send(pack *packet, uint16_t dest);
+  
+  // Event signaled when a LinkState packet is received
+  event void linkStateReceived(pack *packet);
+  
+  // Event signaled when a packet needs routing (not flooding)
+  event uint16_t routePacket(pack *packet);
 }
